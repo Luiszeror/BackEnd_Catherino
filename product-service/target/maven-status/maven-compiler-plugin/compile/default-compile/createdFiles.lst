@@ -1,0 +1,7 @@
+DIMENSITY\SOFTWARE\Back_Catherino\config\CorsConfig.class
+DIMENSITY\SOFTWARE\Back_Catherino\service\ProductService.class
+DIMENSITY\SOFTWARE\Back_Catherino\config\CorsConfig$1.class
+DIMENSITY\SOFTWARE\Back_Catherino\model\Product.class
+DIMENSITY\SOFTWARE\Back_Catherino\ProductsApplication.class
+DIMENSITY\SOFTWARE\Back_Catherino\repository\ProductRepository.class
+DIMENSITY\SOFTWARE\Back_Catherino\controller\ProductController.class
