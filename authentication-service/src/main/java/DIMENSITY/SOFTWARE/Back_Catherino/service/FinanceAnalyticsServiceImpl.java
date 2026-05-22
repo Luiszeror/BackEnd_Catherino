@@ -19,39 +19,40 @@ public class FinanceAnalyticsServiceImpl implements FinanceAnalyticsService {
 
     private final InvoiceFinanceRepository invoiceRepository;
 
-    @Override
-    public List<SoldProductResponse> getAllSoldProducts() {
-        log.info("Obteniendo todos los productos vendidos");
+@Override
+public List<SoldProductResponse> getAllSoldProducts() {
+    log.info("Obteniendo todos los productos vendidos");
 
-        List<Invoice> allInvoices = invoiceRepository.findByStatus("ISSUED");
+    List<Invoice> invoices = invoiceRepository.findByStatus("ISSUED");
 
-        Map<String, SoldProductResponse> productSales = new HashMap<>();
+    Map<String, SoldProductResponse> productSales = new HashMap<>();
 
-        for (Invoice invoice : allInvoices) {
-            for (InvoiceDetail detail : invoice.getDetails()) {
-                String productId = detail.getProductId();
+    invoices.forEach(invoice ->
+            invoice.getDetails().forEach(detail -> {
 
-                SoldProductResponse current = productSales.getOrDefault(productId,
-                        SoldProductResponse.builder()
-                                .productId(productId)
+                SoldProductResponse product = productSales.computeIfAbsent(
+                        detail.getProductId(),
+                        id -> SoldProductResponse.builder()
+                                .productId(id)
                                 .productName(detail.getProductName())
                                 .productCode(detail.getProductCode())
                                 .totalSold(0)
                                 .totalRevenue(0.0)
                                 .totalProfit(0.0)
-                                .build());
+                                .build()
+                );
 
-                current.setTotalSold(current.getTotalSold() + detail.getQuantity());
-                current.setTotalRevenue(current.getTotalRevenue() + detail.getSubtotal());
-                current.setTotalProfit(current.getTotalProfit() +
-                        (detail.getProfit() != null ? detail.getProfit() : 0.0));
+                product.setTotalSold(product.getTotalSold() + detail.getQuantity());
+                product.setTotalRevenue(product.getTotalRevenue() + detail.getSubtotal());
+                product.setTotalProfit(
+                        product.getTotalProfit() +
+                                Optional.ofNullable(detail.getProfit()).orElse(0.0)
+                );
+            })
+    );
 
-                productSales.put(productId, current);
-            }
-        }
-
-        return new ArrayList<>(productSales.values());
-    }
+    return List.copyOf(productSales.values());
+}
 
     @Override
     public SoldProductResponse getSoldProductsByProductId(String productId) {
@@ -150,35 +151,50 @@ public class FinanceAnalyticsServiceImpl implements FinanceAnalyticsService {
                 .collect(Collectors.toList());
     }
 
-    @Override
-    public FinancialSummary getFinancialSummary() {
-        log.info("Generando resumen financiero general");
+@Override
+public FinancialSummary getFinancialSummary() {
+    log.info("Generando resumen financiero general");
 
-        List<Invoice> allInvoices = invoiceRepository.findByStatus("ISSUED");
+    List<Invoice> invoices = invoiceRepository.findByStatus("ISSUED");
 
-        Long totalProductsSold = allInvoices.stream()
-                .flatMap(invoice -> invoice.getDetails().stream())
-                .mapToLong(InvoiceDetail::getQuantity)
-                .sum();
+    long totalInvoices = invoices.size();
 
-        Double totalRevenue = allInvoices.stream()
-                .mapToDouble(Invoice::getTotal)
-                .sum();
+    long totalProductsSold = invoices.stream()
+            .map(Invoice::getDetails)
+            .flatMap(Collection::stream)
+            .reduce(
+                    0L,
+                    (sum, detail) -> sum + detail.getQuantity(),
+                    Long::sum
+            );
 
-        Double totalProfit = allInvoices.stream()
-                .mapToDouble(invoice -> invoice.getTotalProfit() != null ? invoice.getTotalProfit() : 0.0)
-                .sum();
+    double totalRevenue = invoices.stream()
+            .reduce(
+                    0.0,
+                    (sum, invoice) -> sum + invoice.getTotal(),
+                    Double::sum
+            );
 
-        Double averageSaleValue = allInvoices.isEmpty() ? 0.0 : totalRevenue / allInvoices.size();
+    double totalProfit = invoices.stream()
+            .reduce(
+                    0.0,
+                    (sum, invoice) -> sum + Optional
+                            .ofNullable(invoice.getTotalProfit())
+                            .orElse(0.0),
+                    Double::sum
+            );
 
-        return FinancialSummary.builder()
-                .totalInvoices((long) allInvoices.size())
-                .totalProductsSold(totalProductsSold)
-                .totalRevenue(totalRevenue)
-                .totalProfit(totalProfit)
-                .averageSaleValue(averageSaleValue)
-                .build();
-    }
+    double averageSaleValue =
+            totalInvoices > 0 ? totalRevenue / totalInvoices : 0.0;
+
+    return FinancialSummary.builder()
+            .totalInvoices(totalInvoices)
+            .totalProductsSold(totalProductsSold)
+            .totalRevenue(totalRevenue)
+            .totalProfit(totalProfit)
+            .averageSaleValue(averageSaleValue)
+            .build();
+}
 
     private TimeRangeComparison buildTimeRangeComparison(TimeRangeRequest range) {
         List<Invoice> invoices = invoiceRepository.findByIssueDateBetweenAndStatus(
